@@ -17,7 +17,6 @@ def run (playwright: Playwright):
 
     extract_project_detail(page, projects_urls, all_budgets)
     
-    # other actions...
     browser.close()
 
 def parse_budget(text):
@@ -109,7 +108,7 @@ def extract_project_detail(page, projects_urls, budgets):
 
         all_projects.append(project) 
 
-    with open("data/raw/projects.json", "w", encoding="utf-8") as f:
+    with open("data/raw/projects_workana.json", "w", encoding="utf-8") as f:
         json.dump(all_projects, f, indent=4, ensure_ascii=False)
 
 with sync_playwright() as playwright:
