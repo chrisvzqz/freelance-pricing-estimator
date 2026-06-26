@@ -12,19 +12,31 @@ def run (playwright: Playwright):
 
     for url in urls:
         page.goto(f"https://www.freelancer.com{url}")
-
+        
         page.wait_for_selector("#project-list")
 
-        jobs = page.locator(".JobSearchCard-item").all()
+        paginas = page.locator("div.ProjectSearch-header a.btn.number.Pagination-link")
+        hrefs = [p.get_attribute("href") for p in paginas.all()]
 
-        for job in jobs:
-            url_prjct = job.locator("a.JobSearchCard-primary-heading-link").get_attribute("href")
-            if url_prjct.startswith("/projects"):
-                url_job.append(url_prjct)
-        break
+        for h in hrefs:
+            page.goto(h)
+            page.wait_for_selector("#project-list")
 
-    for url_j in url_job:
-        page.goto(f"https://www.freelancer.com{url_j}")
+            jobs = page.locator(".JobSearchCard-item").all()
+
+            for job in jobs:
+                url_prjct = job.locator("a.JobSearchCard-primary-heading-link").get_attribute("href")
+                if url_prjct.startswith("/projects"):
+                    url_job.append(url_prjct)
+        
+    with open("data/raw/url_projects.txt", "w", encoding="utf-8") as f:
+        f.write("\n".join(url_job))  
+
+    # extraer datos de cada proyecto
+    # for url_j in url_job:
+    #     print(f"https://www.freelancer.com{url_j}")
+
+        
         
 
     browser.close()
@@ -45,7 +57,8 @@ def extract_jobs_urls(page):
             for a in areas:
                 text = a.text_content().strip()
                 num = int(text.split("(")[-1].replace(")", ""))
-                if num > 0 and a.get_attribute("href").startswith("/jobs"):
+                excluir = ["AI Translation", "AI-Generated Art", "Voice Synthesis"]
+                if num > 0 and a.get_attribute("href").startswith("/jobs") and not any(text.startswith(e) for e in excluir):
                     job_list.append(a.get_attribute("href"))
 
     return job_list
