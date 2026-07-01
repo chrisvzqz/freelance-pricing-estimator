@@ -8,47 +8,7 @@ def run (playwright: Playwright):
     page = browser.new_page()
 
     urls = extract_jobs_urls(page)
-    # En flujo normal se tendrian que obtener de aqui las urls, pero al haber guardado un .txt pues las cogemos de ahí
-    urls_prjcts = get_urls_all_projects(page, urls) 
-
-    with open("data/raw/url_projects_freelancer.json", "w", encoding="utf-8") as f:
-        json.dump(urls_prjcts, f, indent=4, ensure_ascii=False)
-
-    all_projects = []
-
-    for i, item in enumerate(urls_prjcts):
-        url = item["href"]
-        categoria = item["categoria"]
-        
-        page.goto(url)
-
-        page.wait_for_selector(".ContentContainer")
-
-        budget_min, budget_max, currency, budget_type = parse_budget(page.locator("h2.text-body-24").text_content().strip())
-
-        skills_project = [sk.text_content().strip() for sk in page.locator("fl-link.Tag .Content").all()]
-
-        project = {
-            'title': page.locator("h1.text-body-24").text_content().strip(),
-            'description': page.locator(".Project-description").text_content().strip(),
-            'budget_min': budget_min,
-            'budget_max': budget_max,
-            'currency': currency,
-            'budget_type': budget_type,
-            'skills': skills_project,
-            'project_url': url,
-            'category': categoria,
-            'subcategory': page.locator('fl-breadcrumbs-item[fltrackinglabel="ProjectViewLoggedOut-BreadcrumbSkill"] span').text_content().strip(),
-            'platform': "Freelancer"
-        }
-        
-        all_projects.append(project)
-        
-        # if i == 10:
-        #     break
-
-    with open("data/raw/projects_freelancer.json", "w", encoding="utf-8") as f:
-        json.dump(all_projects, f, indent=4, ensure_ascii=False)
+    extract_projects_data(page, urls)
 
     browser.close()
 
@@ -84,8 +44,17 @@ def parse_budget(text):
 
     return budget_min, budget_max, currency, budget_type
 
-def get_urls_all_projects(page, urls):
-    url_job = []
+def extract_projects_data(page, urls, output_path="data/raw/projects_freelancer.jsonl"):
+    
+    # Cargar URLs ya procesadas para no repetir
+    processed_urls = set() # con set para evitar duplicados
+    try:
+        with open(output_path, "r", encoding="utf-8") as f:
+            for line in f:
+                project = json.loads(line)
+                processed_urls.add(project["project_url"]) # Coge solo la url del proyecto y lo mete en el set
+    except FileNotFoundError:
+        pass
 
     for item in urls:
         url = item["href"]
@@ -96,13 +65,11 @@ def get_urls_all_projects(page, urls):
             page.wait_for_load_state("networkidle")
             page.wait_for_selector("#project-list", state="visible", timeout=15000)
         except Exception as e:
-            print(f"⚠️ Saltando categoría {url} por error: {e}")
+            print(f"⚠️ Saltando categoría {url}: {e}")
             continue
 
         href = page.locator("li[data-link='last_page'] a").first.get_attribute("href")
-
         url_base, num_pags_str = href.rsplit("/", 1)
-        
         if num_pags_str.isdigit():
             num_pags = int(num_pags_str)
         else:
@@ -110,29 +77,57 @@ def get_urls_all_projects(page, urls):
             num_pags = 1
 
         for pag in range(1, num_pags + 1):
-            if num_pags == 1:
-                target_url = url_base
-            else:
-                target_url = f"{url_base}/{pag}"
+            target_url = url_base if num_pags == 1 else f"{url_base}/{pag}"
 
             try:
                 page.goto(target_url)
                 page.wait_for_load_state("networkidle")
                 page.wait_for_selector("#project-list", state="visible", timeout=15000)
             except Exception as e:
-                print(f"⚠️ Saltando página {target_url} por error: {e}")
+                print(f"⚠️ Saltando página {target_url}: {e}")
                 continue
 
             jobs = page.locator(".JobSearchCard-item").all()
             for job in jobs:
                 url_prjct = job.locator("a.JobSearchCard-primary-heading-link").get_attribute("href")
-                if url_prjct.startswith("/projects"):
-                    url_job.append({
-                        "url": f"https://www.freelancer.com{url_prjct}",
-                        "categoria": categoria
-                    })
+                if not url_prjct.startswith("/projects"):
+                    continue
+                
+                full_url = f"https://www.freelancer.com{url_prjct}"
+                
+                # Saltar si ya fue procesado
+                if full_url in processed_urls:
+                    print(f"⏭️ Ya procesado: {full_url}")
+                    continue
 
-    return url_job  
+                try:
+                    page.goto(full_url)
+                    page.wait_for_selector(".ContentContainer", timeout=15000)
+                    budget_min, budget_max, currency, budget_type = parse_budget(
+                        page.locator("h2.text-body-24").text_content().strip()
+                    )
+                    skills_project = [sk.text_content().strip() for sk in page.locator("fl-link.Tag .Content").all()]
+                    project = {
+                        'title': page.locator("h1.text-body-24").text_content().strip(),
+                        'description': page.locator(".Project-description").text_content().strip(),
+                        'budget_min': budget_min,
+                        'budget_max': budget_max,
+                        'currency': currency,
+                        'budget_type': budget_type,
+                        'skills': skills_project,
+                        'project_url': full_url,
+                        'category': categoria,
+                        'subcategory': page.locator('fl-breadcrumbs-item[fltrackinglabel="ProjectViewLoggedOut-BreadcrumbSkill"] span').text_content().strip(),
+                        'platform': "Freelancer"
+                    }
+                    with open(output_path, "a", encoding="utf-8") as f:
+                        json.dump(project, f, ensure_ascii=False)
+                        f.write("\n")
+                    processed_urls.add(full_url)
+
+                except Exception as e:
+                    print(f"⚠️ Error scrapeando proyecto {full_url}: {e}")
+                    continue  
 
 
 def extract_jobs_urls(page):
