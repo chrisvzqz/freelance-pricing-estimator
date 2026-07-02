@@ -4,10 +4,11 @@ import re
 
 def run (playwright: Playwright):
     chronium = playwright.chromium
-    browser = chronium.launch(headless=False)
+    browser = chronium.launch(headless=True)
     page = browser.new_page()
 
     urls = extract_jobs_urls(page)
+    print(f"URLs encontradas: {len(urls)}")
     extract_projects_data(page, urls)
 
     browser.close()
@@ -47,12 +48,12 @@ def parse_budget(text):
 def extract_projects_data(page, urls, output_path="data/raw/projects_freelancer.jsonl"):
     
     # Cargar URLs ya procesadas para no repetir
-    processed_urls = set() # con set para evitar duplicados
+    processed_urls = set()
     try:
         with open(output_path, "r", encoding="utf-8") as f:
             for line in f:
                 project = json.loads(line)
-                processed_urls.add(project["project_url"]) # Coge solo la url del proyecto y lo mete en el set
+                processed_urls.add(project["project_url"])
     except FileNotFoundError:
         pass
 
@@ -78,38 +79,45 @@ def extract_projects_data(page, urls, output_path="data/raw/projects_freelancer.
 
         for pag in range(1, num_pags + 1):
             target_url = url_base if num_pags == 1 else f"{url_base}/{pag}"
+            print(f"📄 Página: {target_url}")
 
             try:
                 page.goto(target_url)
-                page.wait_for_load_state("networkidle")
                 page.wait_for_selector("#project-list", state="visible", timeout=15000)
             except Exception as e:
                 print(f"⚠️ Saltando página {target_url}: {e}")
                 continue
 
             jobs = page.locator(".JobSearchCard-item").all()
+            print(f"  → {len(jobs)} jobs encontrados")
+
+            # Primero recoge todas las URLs de esta página
+            urls_pagina = []
             for job in jobs:
-                url_prjct = job.locator("a.JobSearchCard-primary-heading-link").get_attribute("href")
-                if not url_prjct.startswith("/projects"):
+                try:
+                    url_prjct = job.locator("a.JobSearchCard-primary-heading-link").get_attribute("href", timeout=5000)
+                    if url_prjct and url_prjct.startswith("/projects"):
+                        urls_pagina.append(f"https://www.freelancer.com{url_prjct}")
+                except Exception:
                     continue
-                
-                full_url = f"https://www.freelancer.com{url_prjct}"
-                
-                # Saltar si ya fue procesado
+
+            # Luego itera sobre las URLs ya guardadas
+            for full_url in urls_pagina:
                 if full_url in processed_urls:
                     print(f"⏭️ Ya procesado: {full_url}")
                     continue
 
                 try:
                     page.goto(full_url)
-                    page.wait_for_selector(".ContentContainer", timeout=15000)
+                    page.wait_for_selector(".ContentContainer", timeout=10000)
+
                     budget_min, budget_max, currency, budget_type = parse_budget(
-                        page.locator("h2.text-body-24").text_content().strip()
+                        page.locator("h2.text-body-24").text_content(timeout=5000).strip()
                     )
                     skills_project = [sk.text_content().strip() for sk in page.locator("fl-link.Tag .Content").all()]
                     project = {
-                        'title': page.locator("h1.text-body-24").text_content().strip(),
-                        'description': page.locator(".Project-description").text_content().strip(),
+                        'title': page.locator("h1.text-body-24").text_content(timeout=5000).strip(),
+                        'description': page.locator(".Project-description").text_content(timeout=5000).strip(),
                         'budget_min': budget_min,
                         'budget_max': budget_max,
                         'currency': currency,
@@ -117,17 +125,20 @@ def extract_projects_data(page, urls, output_path="data/raw/projects_freelancer.
                         'skills': skills_project,
                         'project_url': full_url,
                         'category': categoria,
-                        'subcategory': page.locator('fl-breadcrumbs-item[fltrackinglabel="ProjectViewLoggedOut-BreadcrumbSkill"] span').text_content().strip(),
+                        'subcategory': page.locator('fl-breadcrumbs-item[fltrackinglabel="ProjectViewLoggedOut-BreadcrumbSkill"] span').text_content(timeout=5000).strip(),
                         'platform': "Freelancer"
                     }
                     with open(output_path, "a", encoding="utf-8") as f:
                         json.dump(project, f, ensure_ascii=False)
                         f.write("\n")
                     processed_urls.add(full_url)
+                    print(f"✅ Guardado: {full_url}")
 
                 except Exception as e:
                     print(f"⚠️ Error scrapeando proyecto {full_url}: {e}")
-                    continue  
+                    continue
+    print(f"✅ Extracción de proyectos completada. Total proyectos guardados: {len(processed_urls)}")
+
 
 
 def extract_jobs_urls(page):
