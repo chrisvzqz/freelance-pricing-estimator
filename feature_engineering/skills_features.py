@@ -57,3 +57,26 @@ def transform_skills_column(df):
     df['skills'] = df['skills'].apply(translate_skills)
 
     return df
+
+def filter_frequent_skills(df):
+    df = df.copy()
+
+    skills = df['skills'].explode().value_counts()
+
+    skills_thrshld = skills[skills >= 10].index
+
+    df_thrshld = df['skills'].apply(
+        lambda project_skills: [
+            skill
+            for skill in project_skills
+            if skill in skills_thrshld
+        ]
+    )
+
+    df['skills'] = df_thrshld
+
+    return df
+    
+
+# def find_similar_skills(df):
+#def encode_skills(df):
