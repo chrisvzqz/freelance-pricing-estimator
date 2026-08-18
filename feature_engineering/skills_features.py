@@ -1,3 +1,7 @@
+from rapidfuzz import fuzz
+from sklearn.preprocessing import MultiLabelBinarizer
+import pandas as pd
+
 SKILLS_MAPPING = {
     # Translation
     "Modelado de Datos": "Data Modeling",
@@ -37,7 +41,13 @@ SKILLS_MAPPING = {
     "Prestashop": "PrestaShop",
     "Qlikview": "QlikView",
     "R programming language": "R Programming Language",
-    "Saas": "SaaS"
+    "Saas": "SaaS",
+
+    # Merge
+    "Content Management System (CMS)": "Content Management System",
+    "Machine Learning (ML)": "Machine Learning",
+    "Amazon Web Services (AWS)": "Amazon Web Services",
+    "Website Development": "Web Development"
 }
 
 def create_skills_count(df):
@@ -78,5 +88,42 @@ def filter_frequent_skills(df):
     return df
     
 
-# def find_similar_skills(df):
-#def encode_skills(df):
+def find_similar_skills(df, similarity_threshold=85):
+    skills = df["skills"].explode().drop_duplicates().tolist()
+
+    similar_skills = []
+
+    for i in range(len(skills)):
+        for j in range(i + 1, len(skills)):
+            skill_1 = skills[i]
+            skill_2 = skills[j]
+
+            similarity = fuzz.ratio(skill_1, skill_2)
+
+            if similarity >= similarity_threshold:
+                similar_skills.append(
+                    (skill_1, skill_2, similarity)
+                )
+
+    return sorted(
+        similar_skills,
+        key=lambda x: x[2],
+        reverse=True
+    )
+
+
+def encode_skills(df):
+    df = df.copy()
+    mlb = MultiLabelBinarizer()
+
+    encoded_skills = mlb.fit_transform(df['skills'])
+
+    skills_encoded_df = pd.DataFrame(
+        encoded_skills,
+        columns=mlb.classes_,
+        index=df.index
+    )
+
+    df = df.drop('skills', axis=1)
+
+    return pd.concat([df, skills_encoded_df], axis=1)

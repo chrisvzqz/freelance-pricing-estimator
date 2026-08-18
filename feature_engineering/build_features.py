@@ -1,5 +1,6 @@
 from feature_engineering.budget_features import normalize_currency, create_target, detect_outliers
 from feature_engineering.category_features import normalize_categories, group_rare_subcategories
+from feature_engineering.skills_features import create_skills_count, transform_skills_column, filter_frequent_skills, encode_skills
 from database.connection import engine
 from sqlalchemy import text
 import pandas as pd
@@ -16,4 +17,10 @@ df = detect_outliers(df)
 df = normalize_categories(df)
 df = group_rare_subcategories(df)
 
-print(df['subcategory'].value_counts())
+# Skills features
+df = create_skills_count(df)
+df = transform_skills_column(df)
+df = filter_frequent_skills(df)
+df = encode_skills(df)
+
+print(df.columns)

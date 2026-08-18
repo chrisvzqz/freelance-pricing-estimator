@@ -53,4 +53,4 @@ def detect_outliers(df):
     df_fixed = _detect_outliers_single_group(df_fixed)
     df_hourly = _detect_outliers_single_group(df_hourly)
 
-    return pd.concat([df_fixed, df_hourly])
+    return pd.concat([df_fixed, df_hourly]).sort_index()
