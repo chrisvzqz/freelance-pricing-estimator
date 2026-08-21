@@ -1,6 +1,7 @@
 from feature_engineering.budget_features import normalize_currency, create_target, detect_outliers
 from feature_engineering.category_features import normalize_categories, group_rare_subcategories
 from feature_engineering.skills_features import create_skills_count, transform_skills_column, filter_frequent_skills, encode_skills
+from feature_engineering.text_features import clean_text, translate_text
 from database.connection import engine
 from sqlalchemy import text
 import pandas as pd
@@ -23,4 +24,11 @@ df = transform_skills_column(df)
 df = filter_frequent_skills(df)
 df = encode_skills(df)
 
-print(df.columns)
+# Text features
+df = clean_text(df)
+df = translate_text(df)
+
+df = df.drop(columns=['created_at'])
+
+with open("data/processed/projects_features.jsonl", "w", encoding="utf-8") as f:
+    df.to_json(f, orient='records', lines=True, force_ascii=False)
