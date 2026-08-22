@@ -4,6 +4,15 @@ CATEGORY_MAPPING = {
     "Artificial Intelligence" : "Artificial Intelligence"
 }
 
+SUBCATEGORY_MAPPING = {
+    "Otros" : "Other",
+    "Programación Web" : "Web Development",
+    "Inteligencia Artificial" : "Artificial Intelligence",
+    "Tiendas Online (E-Commerce)" : "Ecommerce",
+    "Programación De Apps. Android, Ios Y Otros" : "App Development",
+    "Aplicaciones De Escritorio" : "Desktop Apps"
+}
+
 def normalize_categories(df):
     df = df.copy()
 
@@ -11,6 +20,7 @@ def normalize_categories(df):
     df['subcategory'] = df['subcategory'].str.strip().str.title()
 
     df['category'] = df['category'].map(CATEGORY_MAPPING)
+    df['subcategory'] = df['subcategory'].replace(SUBCATEGORY_MAPPING)
 
     return df
 
